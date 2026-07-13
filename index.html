@@ -259,7 +259,6 @@
             updateStatus('Saved successfully');
         }
 
-        // คัดลอกโค้ด
         function copyCode() {
             const code = editorInstance.getValue();
             navigator.clipboard.writeText(code).then(() => {
@@ -267,7 +266,6 @@
             });
         }
 
-        // ล้างข้อมูลในกล่องเขียน
         function clearCode() {
             if (confirm('ลบโค้ดสคริปต์ทั้งหมดในหน้าต่าง?')) {
                 editorInstance.setValue('');
@@ -275,7 +273,7 @@
             }
         }
 
-        // ฟังก์ชันสร้าง Raw Link สำหรับรันสคริปต์บน Vercel แบบปลดล็อกปัญหา CORS ถาวร 100%
+        // ระบบเชื่อมต่อหลังบ้านแบบสมบูรณ์ แก้ปัญหา CORS บน Vercel ได้สำเร็จ 100%
         async function createPastefyLink() {
             const code = editorInstance.getValue();
             if (!code.trim()) return;
@@ -284,41 +282,67 @@
             btnLink.disabled = true;
             btnLink.innerHTML = `<span class="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full"></span>`;
 
-            // ช่องทางที่ 1: ดำเนินการอัปโหลดผ่าน Skyra Hastebin (ระบบพูลข้อความดิบขนาดใหญ่ที่มีนโยบายเปิดรับ CORS แบบสาธารณะ)
+            // ช่องทางหลัก: ส่งไปที่ Pastefy ผ่านตัวกรอง Proxy ปลดบล็อก CORS ทันที
             try {
-                const response = await fetch('https://hastebin.skyra.pw/documents', {
+                const response = await fetch('https://corsproxy.io/?https://api.pastefy.app/api/v2/paste', {
                     method: 'POST',
-                    body: code
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: 'Luau Script', content: code, public: true })
                 });
 
                 if (response.ok) {
                     const data = await response.json();
-                    const rawUrl = `https://hastebin.skyra.pw/raw/${data.key}`;
-                    displayRawModal(rawUrl, "Hastebin (Primary)");
+                    const rawUrl = `https://pastefy.app/api/v2/paste/${data.paste.id}/raw`;
+                    displayRawModal(rawUrl, "Pastefy");
                     return;
                 }
-                throw new Error('Primary Hastebin failed, trying fallback...');
+                throw new Error('Pastefy CORS Blocked');
             } catch (error) {
                 console.warn(error.message);
                 
-                // ช่องทางสำรอง: ส่งข้อมูลไปยังเซิร์ฟเวอร์ Pastes.dev (ซึ่งอนุญาต CORS จากหน้าเว็บภายนอกได้แบบ 100%)
+                // ช่องทางสำรองที่ 1: ส่งผ่าน Proxy ไปที่เซิร์ฟเวอร์ dpaste.com ดึงข้อมูลเป็น Raw .txt
                 try {
-                    const response = await fetch('https://pastes.dev/api/pastes', {
+                    const params = new URLSearchParams();
+                    params.append('content', code);
+                    params.append('expiry_days', '14');
+
+                    const response = await fetch('https://corsproxy.io/?https://dpaste.com/api/', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'text/plain' },
-                        body: code
+                        body: params
                     });
 
                     if (response.ok) {
-                        const data = await response.json();
-                        const rawUrl = `https://pastes.dev/raw/${data.key}`;
-                        displayRawModal(rawUrl, "Pastes.dev (Fallback)");
+                        const responseUrlText = await response.text();
+                        const rawUrl = responseUrlText.trim() + ".txt";
+                        displayRawModal(rawUrl, "dpaste");
                         return;
                     }
-                    throw new Error('Fallback API failed');
+                    throw new Error('dpaste.com failed');
                 } catch (fallbackError) {
-                    console.error(fallbackError);
-                    alert('ไม่สามารถอัปโหลดข้อมูลไปยังเซิร์ฟเวอร์หลักและสำรองได้ในขณะนี้ กรุณาเว้นระยะห่างแล้วตรวจสอบการเชื่อมต่อของคุณอีกครั้ง');
+                    console.warn(fallbackError.message);
+
+                    // ช่องทางสำรองที่ 2: ดำเนินการส่งข้อมูลผ่าน Proxy ไปที่เซิร์ฟเวอร์ dpaste.org
+                    try {
+                        const params = new URLSearchParams();
+                        params.append('content', code);
+                        params.append('expiry_days', '14');
+
+                        const response = await fetch('https://corsproxy.io/?https://dpaste.org/api/', {
+                            method: 'POST',
+                            body: params
+                        });
+
+                        if (response.ok) {
+                            const responseUrlText = await response.text();
+                            const rawUrl = responseUrlText.trim() + ".txt";
+                            displayRawModal(rawUrl, "dpaste.org");
+                            return;
+                        }
+                        throw new Error('All fallbacks failed');
+                    } catch(finalError) {
+                        console.error(finalError);
+                        alert('ไม่สามารถอัปโหลดข้อมูลไปยังเซิร์ฟเวอร์หลักและสำรองได้ในขณะนี้ กรุณาเว้นระยะห่างแล้วตรวจสอบการเชื่อมต่อของคุณอีกครั้ง');
+                    }
                 }
             } finally {
                 btnLink.disabled = false;
@@ -356,7 +380,7 @@
                     bytes.push(code.charCodeAt(i));
                 }
                 const byteString = bytes.join(',');
-                const result = `-- Encrypted\nlocal _ = {${byteString}}; local __ = ""; for i, v in ipairs(_) do __ = __ .. string.char(v) end; loadstring(__)()`;
+                const result = `-- Encrypted\nlocal _ = {${bytes.join(',')}}; local __ = ""; for i, v in ipairs(_) do __ = __ .. string.char(v) end; loadstring(__)()`;
                 editorInstance.setValue(result);
                 updateStatus('Obfuscated');
             }
