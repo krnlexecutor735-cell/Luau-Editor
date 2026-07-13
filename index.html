@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>LUAU EDIT</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+    
+    <style>
+        /* ตัวแปรสีระดับสูงเพื่อการตอบสนองธีมแบบเรียลไทม์ */
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #fbfbfb;
+            --border-color: #e5e5e5;
+            --text-primary: #171717;
+            --text-secondary: #737373;
+            --btn-hover: #f5f5f5;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #121212;
+            --border-color: #262626;
+            --text-primary: #f5f5f5;
+            --text-secondary: #a3a3a3;
+            --btn-hover: #1a1a1a;
+        }
+
+        /* ปิดทับ Transitions ทั้งหมดเพื่อการเปลี่ยนธีมแบบ Real-time ทันที */
+        *, *::before, *::after {
+            transition: none !important;
+            animation-duration: 0s !important;
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        /* 
+           ปุ่มควบคุมสไตล์ Responsive:
+           - บนโทรศัพท์มือถือ: มีสถานะเป็นวงกลม/สี่เหลี่ยมจัตุรัส w-8 h-8 (32px)
+           - บนคอมพิวเตอร์ (sm ขึ้นไป): ความกว้างจะยืดตามความยาวของข้อความ และมีช่องว่างด้านข้าง (px-3) 
+        */
+        .btn-action {
+            height: 2rem; /* 32px */
+            width: 2rem;  /* 32px สำหรับมือถือ */
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            border-radius: 0.375rem;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+
+        @media (min-width: 640px) {
+            .btn-action {
+                width: auto !important; /* ปลดล็อกความยาวปุ่มบนคอมพิวเตอร์ */
+                padding-left: 0.75rem;   /* เติมระยะห่างด้านซ้าย */
+                padding-right: 0.75rem;  /* เติมระยะห่างด้านขวา */
+            }
+        }
+
+        .btn-action:hover {
+            background-color: var(--btn-hover);
+        }
+
+        .modal-box {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen" data-theme="light">
+
+    <!-- TOOLBAR (แถบเครื่องมือด้านบน สูง 48px เสมอภาคทุกขนาดจอ) -->
+    <header class="h-12 px-4 border-b flex items-center justify-between select-none" style="background-color: var(--bg-primary); border-color: var(--border-color);">
+        <!-- โลโก้คงอยู่ที่เดิมเสมอตราบใดที่เปิดโปรแกรม -->
+        <div class="flex items-center h-full">
+            <span class="text-sm font-bold tracking-widest uppercase" style="color: var(--text-primary);">
+                LUAU EDIT
+            </span>
+        </div>
+
+        <!-- กลุ่มปุ่มแบบยืดหยุ่น (มือถือ = เฉพาะไอคอน | คอมพิวเตอร์ = ไอคอน + ข้อความอธิบาย) -->
+        <div class="flex items-center gap-1.5">
+            <button onclick="saveFile()" class="btn-action" title="Save File" id="btn-save">
+                <i data-lucide="save" class="w-4 h-4"></i>
+                <span class="hidden sm:inline text-xs font-medium ml-1.5">Save</span>
+            </button>
+            <button onclick="copyCode()" class="btn-action" title="Copy Code" id="btn-copy">
+                <i data-lucide="copy" class="w-4 h-4"></i>
+                <span class="hidden sm:inline text-xs font-medium ml-1.5">Copy</span>
+            </button>
+            <button onclick="clearCode()" class="btn-action" title="Clear Code" id="btn-clear">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                <span class="hidden sm:inline text-xs font-medium ml-1.5">Clear</span>
+            </button>
+            <button onclick="createPastefyLink()" class="btn-action" title="Get Raw Link" id="btn-link">
+                <i data-lucide="link" class="w-4 h-4"></i>
+                <span class="hidden sm:inline text-xs font-medium ml-1.5">Link</span>
+            </button>
+            <button onclick="obfuscateCode()" class="btn-action" title="Obfuscate" id="btn-obf">
+                <i data-lucide="shield" class="w-4 h-4"></i>
+                <span class="hidden sm:inline text-xs font-medium ml-1.5">Obf</span>
+            </button>
+            <button onclick="toggleTheme()" class="btn-action" title="Toggle Theme" id="btn-theme">
+                <i data-lucide="moon" class="w-4 h-4" id="theme-icon"></i>
+                <span class="hidden sm:inline text-xs font-medium ml-1.5" id="theme-text">Dark</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- EDITOR WORKSPACE -->
+    <main class="flex-grow w-full relative overflow-hidden" style="background-color: var(--bg-primary);">
+        <div id="editor-view" class="absolute inset-0 w-full h-full"></div>
+    </main>
+
+    <!-- STATUS BAR (แถบแสดงสถานะด้านล่างแบบเรียบง่ายคงเดิม) -->
+    <footer class="h-7 px-4 border-t flex items-center justify-between text-[11px] select-none" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-secondary);">
+        <div class="flex items-center gap-2 h-full">
+            <span class="w-1.5 h-1.5 rounded-full bg-neutral-400" id="status-dot"></span>
+            <span id="status-text" class="font-medium">Ready</span>
+        </div>
+        <div id="position-text" class="font-mono">Ln 1, Col 1</div>
+    </footer>
+
+    <!-- MODAL -->
+    <div id="link-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div class="rounded-md p-5 w-full max-w-xs space-y-4 shadow-lg modal-box">
+            <h3 class="text-xs font-bold tracking-wider uppercase" style="color: var(--text-primary);">Raw Link</h3>
+            <input type="text" id="pastefy-url" readonly class="w-full p-2 border text-xs font-mono rounded focus:outline-none" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+            <div class="flex justify-end gap-1.5 text-xs pt-1">
+                <button onclick="closeModal()" class="px-3 py-1.5 border rounded-md" style="border-color: var(--border-color); color: var(--text-secondary);">Close</button>
+                <button onclick="copyModalLink()" class="px-3 py-1.5 bg-neutral-900 text-white rounded-md hover:bg-neutral-800">Copy</button>
+                <a id="modal-open-link" target="_blank" class="px-3 py-1.5 border rounded-md flex items-center gap-1" style="border-color: var(--border-color); color: var(--text-primary);">Open</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // เปิดใช้งานระบบไอคอน Lucide
+        lucide.createIcons();
+
+        let editorInstance;
+        let activeTheme = 'light';
+
+        // โหลดตัว Monaco Editor สำหรับระบบเขียนสคริปต์
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            
+            // ขยายระบบ Autocomplete สนับสนุน Luau (Roblox API)
+            monaco.languages.registerCompletionItemProvider('lua', {
+                provideCompletionItems: function (model, position) {
+                    const word = model.getWordUntilPosition(position);
+                    const range = {
+                        startLineNumber: position.lineNumber,
+                        endLineNumber: position.lineNumber,
+                        startColumn: word.startColumn,
+                        endColumn: word.endColumn
+                    };
+
+                    const autocompleteItems = [
+                        { label: 'game', kind: monaco.languages.CompletionItemKind.Variable, insertText: 'game', detail: 'Roblox DataModel (Global)', range: range },
+                        { label: 'workspace', kind: monaco.languages.CompletionItemKind.Variable, insertText: 'workspace', detail: 'Workspace Service', range: range },
+                        { label: 'script', kind: monaco.languages.CompletionItemKind.Variable, insertText: 'script', detail: 'Current Script Instance', range: range },
+                        { label: 'task.wait', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.wait(${1:seconds})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Yields the current thread', range: range },
+                        { label: 'task.spawn', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.spawn(${1:function})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Runs a function immediately', range: range },
+                        { label: 'task.defer', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.defer(${1:function})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
+                        { label: 'task.delay', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.delay(${1:duration}, ${2:function})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
+                        { label: 'Instance.new', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Instance.new("${1:ClassName}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Creates a new Object', range: range },
+                        { label: 'GetService', kind: monaco.languages.CompletionItemKind.Method, insertText: 'GetService("${1:ServiceName}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Gets a Roblox Service', range: range },
+                        { label: 'Players', kind: monaco.languages.CompletionItemKind.Class, insertText: 'Players', detail: 'Players Service', range: range },
+                        { label: 'ReplicatedStorage', kind: monaco.languages.CompletionItemKind.Class, insertText: 'ReplicatedStorage', detail: 'ReplicatedStorage Service', range: range },
+                        { label: 'TweenService', kind: monaco.languages.CompletionItemKind.Class, insertText: 'TweenService', range: range },
+                        { label: 'UserInputService', kind: monaco.languages.CompletionItemKind.Class, insertText: 'UserInputService', range: range },
+                        { label: 'FindFirstChild', kind: monaco.languages.CompletionItemKind.Method, insertText: 'FindFirstChild("${1:Name}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
+                        { label: 'WaitForChild', kind: monaco.languages.CompletionItemKind.Method, insertText: 'WaitForChild("${1:Name}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
+                        { label: 'Destroy', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Destroy()', range: range },
+                        { label: 'Clone', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Clone()', range: range },
+                        { label: 'Connect', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Connect(function(${1:args})\n\t$0\nend)', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range }
+                    ];
+
+                    return { suggestions: autocompleteItems };
+                }
+            });
+
+            // ตรวจสอบและตั้งค่า Layout ตัวเขียน
+            editorInstance = monaco.editor.create(document.getElementById('editor-view'), {
+                value: 'print("Hello Roblox")',
+                language: 'lua',
+                theme: 'vs',
+                automaticLayout: true,
+                fontSize: 14,
+                lineHeight: 19,
+                minimap: { enabled: false },
+                autoClosingBrackets: 'always',
+                autoClosingQuotes: 'always',
+                wordWrap: "on",
+                scrollbar: {
+                    verticalScrollbarSize: 8,
+                    horizontalScrollbarSize: 8
+                },
+                lineNumbersMinChars: 3,
+                glyphMargin: false,
+                folding: false,
+                lineDecorationsWidth: 6
+            });
+
+            // จับตำแหน่งเคอร์เซอร์อัปเดตสถานะ
+            editorInstance.onDidChangeCursorPosition(function (e) {
+                document.getElementById('position-text').innerText = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+            });
+
+            setTimeout(() => {
+                editorInstance.layout();
+            }, 80);
+        });
+
+        // ตรวจจับขนาดจอเพื่อทำการวาด Layout ตัวเขียนใหม่
+        window.addEventListener('resize', () => {
+            if (editorInstance) {
+                editorInstance.layout();
+            }
+        });
+
+        // ฟังก์ชันสลับสีธีมแบบเสี้ยววินาที (พร้อมกันทั้งเว็บ)
+        function toggleTheme() {
+            const body = document.body;
+            const themeIcon = document.getElementById('theme-icon');
+            const themeText = document.getElementById('theme-text');
+
+            if (activeTheme === 'light') {
+                activeTheme = 'dark';
+                body.setAttribute('data-theme', 'dark');
+                monaco.editor.setTheme('vs-dark');
+                themeIcon.setAttribute('data-lucide', 'sun');
+                themeText.innerText = 'Light';
+            } else {
+                activeTheme = 'light';
+                body.setAttribute('data-theme', 'light');
+                monaco.editor.setTheme('vs');
+                themeIcon.setAttribute('data-lucide', 'moon');
+                themeText.innerText = 'Dark';
+            }
+            lucide.createIcons();
+        }
+
+        // ดาวน์โหลดสคริปต์
+        function saveFile() {
+            const code = editorInstance.getValue();
+            const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'script.luau';
+            a.click();
+            URL.revokeObjectURL(url);
+            updateStatus('Saved successfully');
+        }
+
+        // คัดลอกโค้ด
+        function copyCode() {
+            const code = editorInstance.getValue();
+            navigator.clipboard.writeText(code).then(() => {
+                updateStatus('Copied to clipboard');
+            });
+        }
+
+        // ล้างกล่องพิมพ์สคริปต์
+        function clearCode() {
+            if (confirm('ลบโค้ดสคริปต์ทั้งหมดในหน้าต่าง?')) {
+                editorInstance.setValue('');
+                updateStatus('Editor cleared');
+            }
+        }
+
+        // สร้างลิงก์ Raw ด้วย Pastefy API
+        async function createPastefyLink() {
+            const code = editorInstance.getValue();
+            if (!code.trim()) return;
+
+            const btnLink = document.getElementById('btn-link');
+            btnLink.disabled = true;
+            btnLink.innerHTML = `<span class="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full"></span>`;
+
+            try {
+                const response = await fetch('https://api.pastefy.app/api/v2/paste', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: 'Luau Script', content: code, public: true })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const rawUrl = `https://pastefy.app/api/v2/paste/${data.paste.id}/raw`;
+                    document.getElementById('pastefy-url').value = rawUrl;
+                    document.getElementById('modal-open-link').setAttribute('href', rawUrl);
+                    document.getElementById('link-modal').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Connection failure');
+            } finally {
+                btnLink.disabled = false;
+                // เปลี่ยนกลับมาเป็นโครงสร้างปุ่ม Responsive ที่รองรับข้อความภาษาอังกฤษบนคอมพิวเตอร์
+                btnLink.innerHTML = `<i data-lucide="link" class="w-4 h-4"></i><span class="hidden sm:inline text-xs font-medium ml-1.5">Link</span>`;
+                lucide.createIcons();
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('link-modal').classList.add('hidden');
+        }
+
+        function copyModalLink() {
+            const urlInput = document.getElementById('pastefy-url');
+            urlInput.select();
+            document.execCommand('copy');
+            updateStatus('Link copied');
+        }
+
+        // ฟังก์ชันเข้ารหัสสคริปต์
+        function obfuscateCode() {
+            const code = editorInstance.getValue();
+            if (!code.trim()) return;
+
+            if (confirm('คุณต้องการเข้ารหัสสคริปต์นี้ใช่หรือไม่?')) {
+                let bytes = [];
+                for (let i = 0; i < code.length; i++) {
+                    bytes.push(code.charCodeAt(i));
+                }
+                const byteString = bytes.join(',');
+                const result = `-- Encrypted\nlocal _ = {${byteString}}; local __ = ""; for i, v in ipairs(_) do __ = __ .. string.char(v) end; loadstring(__)()`;
+                editorInstance.setValue(result);
+                updateStatus('Obfuscated');
+            }
+        }
+
+        // จัดการแสดงผลข้อมูลสถานะ
+        function updateStatus(text) {
+            const statusText = document.getElementById('status-text');
+            const statusDot = document.getElementById('status-dot');
+            statusText.innerText = text;
+            statusDot.className = "w-1.5 h-1.5 rounded-full bg-neutral-600";
+
+            setTimeout(() => {
+                statusText.innerText = 'Ready';
+                statusDot.className = "w-1.5 h-1.5 rounded-full bg-neutral-400";
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
