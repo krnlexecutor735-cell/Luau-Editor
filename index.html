@@ -4,15 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>LUAU EDIT</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Monaco Editor Loader -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
     
     <style>
-        /* ตัวแปรสีระดับสูงเพื่อการตอบสนองธีมแบบเรียลไทม์ */
         :root {
             --bg-primary: #ffffff;
             --bg-secondary: #fbfbfb;
@@ -31,7 +27,6 @@
             --btn-hover: #1a1a1a;
         }
 
-        /* ปิดทับ Transitions ทั้งหมดเพื่อการเปลี่ยนธีมแบบ Real-time ทันที */
         *, *::before, *::after {
             transition: none !important;
             animation-duration: 0s !important;
@@ -47,10 +42,9 @@
             color: var(--text-primary);
         }
 
-        /* ปุ่มควบคุมสไตล์ Responsive */
         .btn-action {
-            height: 2rem; /* 32px */
-            width: 2rem;  /* 32px สำหรับมือถือ */
+            height: 2rem;
+            width: 2rem;
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -82,7 +76,6 @@
 </head>
 <body class="flex flex-col h-screen" data-theme="light">
 
-    <!-- TOOLBAR (แถบเครื่องมือด้านบน สูง 48px เสมอภาคทุกขนาดจอ) -->
     <header class="h-12 px-4 border-b flex items-center justify-between select-none" style="background-color: var(--bg-primary); border-color: var(--border-color);">
         <div class="flex items-center h-full">
             <span class="text-sm font-bold tracking-widest uppercase" style="color: var(--text-primary);">
@@ -118,12 +111,10 @@
         </div>
     </header>
 
-    <!-- EDITOR WORKSPACE -->
     <main class="flex-grow w-full relative overflow-hidden" style="background-color: var(--bg-primary);">
-        <div id="editor-view" class="absolute inset-0 w-full h-full"></div>
+        <div id="editor-view" class="absolute inset-0 w-full h-full flex items-center justify-center"></div>
     </main>
 
-    <!-- STATUS BAR -->
     <footer class="h-7 px-4 border-t flex items-center justify-between text-[11px] select-none" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-secondary);">
         <div class="flex items-center gap-2 h-full">
             <span class="w-1.5 h-1.5 rounded-full bg-neutral-400" id="status-dot"></span>
@@ -132,7 +123,6 @@
         <div id="position-text" class="font-mono">Ln 1, Col 1</div>
     </footer>
 
-    <!-- MODAL -->
     <div id="link-modal" class="hidden fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
         <div class="rounded-md p-5 w-full max-w-xs space-y-4 shadow-lg modal-box">
             <h3 class="text-xs font-bold tracking-wider uppercase" style="color: var(--text-primary);" id="modal-header-text">Raw Link</h3>
@@ -146,79 +136,88 @@
     </div>
 
     <script>
-        lucide.createIcons();
+        // ✅ 1. ตรวจสอบก่อนโหลดไอคอน ป้องกัน Script พังถ้าโหลดเน็ตไม่ติด
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
 
         let editorInstance;
         let activeTheme = 'light';
 
-        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' } });
-        require(['vs/editor/editor.main'], function () {
-            
-            // ขยายระบบ Autocomplete สนับสนุน Luau (Roblox API)
-            monaco.languages.registerCompletionItemProvider('lua', {
-                provideCompletionItems: function (model, position) {
-                    const word = model.getWordUntilPosition(position);
-                    const range = {
-                        startLineNumber: position.lineNumber,
-                        endLineNumber: position.lineNumber,
-                        startColumn: word.startColumn,
-                        endColumn: word.endColumn
-                    };
+        // ✅ 2. ตรวจสอบว่า require.js โหลดติดหรือไม่ (ถ้าไม่ติดให้แจ้งเตือนแทนจอขาว)
+        if (typeof require === 'undefined') {
+            document.getElementById('editor-view').innerHTML = '<p class="text-xs text-red-500 font-mono text-center px-4">Error: ไม่สามารถโหลด Monaco Editor ได้<br>แอป IDE ของคุณอาจบล็อกการเชื่อมต่อ Internet</p>';
+        } else {
+            require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.39.0/min/vs' } });
+            require(['vs/editor/editor.main'], function () {
+                
+                monaco.languages.registerCompletionItemProvider('lua', {
+                    provideCompletionItems: function (model, position) {
+                        const word = model.getWordUntilPosition(position);
+                        const range = {
+                            startLineNumber: position.lineNumber,
+                            endLineNumber: position.lineNumber,
+                            startColumn: word.startColumn,
+                            endColumn: word.endColumn
+                        };
 
-                    const autocompleteItems = [
-                        { label: 'game', kind: monaco.languages.CompletionItemKind.Variable, insertText: 'game', detail: 'Roblox DataModel (Global)', range: range },
-                        { label: 'workspace', kind: monaco.languages.CompletionItemKind.Variable, insertText: 'workspace', detail: 'Workspace Service', range: range },
-                        { label: 'script', kind: monaco.languages.CompletionItemKind.Variable, insertText: 'script', detail: 'Current Script Instance', range: range },
-                        { label: 'task.wait', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.wait(${1:seconds})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Yields the current thread', range: range },
-                        { label: 'task.spawn', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.spawn(${1:function})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Runs a function immediately', range: range },
-                        { label: 'task.defer', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.defer(${1:function})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
-                        { label: 'task.delay', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.delay(${1:duration}, ${2:function})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
-                        { label: 'Instance.new', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Instance.new("${1:ClassName}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Creates a new Object', range: range },
-                        { label: 'GetService', kind: monaco.languages.CompletionItemKind.Method, insertText: 'GetService("${1:ServiceName}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
-                        { label: 'Players', kind: monaco.languages.CompletionItemKind.Class, insertText: 'Players', detail: 'Players Service', range: range },
-                        { label: 'ReplicatedStorage', kind: monaco.languages.CompletionItemKind.Class, insertText: 'ReplicatedStorage', detail: 'ReplicatedStorage Service', range: range },
-                        { label: 'TweenService', kind: monaco.languages.CompletionItemKind.Class, insertText: 'TweenService', range: range },
-                        { label: 'UserInputService', kind: monaco.languages.CompletionItemKind.Class, insertText: 'UserInputService', range: range },
-                        { label: 'FindFirstChild', kind: monaco.languages.CompletionItemKind.Method, insertText: 'FindFirstChild("${1:Name}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
-                        { label: 'WaitForChild', kind: monaco.languages.CompletionItemKind.Method, insertText: 'WaitForChild("${1:Name}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
-                        { label: 'Destroy', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Destroy()', range: range },
-                        { label: 'Clone', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Clone()', range: range },
-                        { label: 'Connect', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Connect(function(${1:args})\n\t$0\nend)', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range }
-                    ];
+                        const autocompleteItems = [
+                            { label: 'game', kind: monaco.languages.CompletionItemKind.Variable, insertText: 'game', detail: 'Roblox DataModel (Global)', range: range },
+                            { label: 'workspace', kind: monaco.languages.CompletionItemKind.Variable, insertText: 'workspace', detail: 'Workspace Service', range: range },
+                            { label: 'script', kind: monaco.languages.CompletionItemKind.Variable, insertText: 'script', detail: 'Current Script Instance', range: range },
+                            { label: 'task.wait', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.wait(${1:seconds})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Yields the current thread', range: range },
+                            { label: 'task.spawn', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.spawn(${1:function})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Runs a function immediately', range: range },
+                            { label: 'task.defer', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.defer(${1:function})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
+                            { label: 'task.delay', kind: monaco.languages.CompletionItemKind.Function, insertText: 'task.delay(${1:duration}, ${2:function})', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
+                            { label: 'Instance.new', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Instance.new("${1:ClassName}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, detail: 'Creates a new Object', range: range },
+                            { label: 'GetService', kind: monaco.languages.CompletionItemKind.Method, insertText: 'GetService("${1:ServiceName}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
+                            { label: 'Players', kind: monaco.languages.CompletionItemKind.Class, insertText: 'Players', detail: 'Players Service', range: range },
+                            { label: 'ReplicatedStorage', kind: monaco.languages.CompletionItemKind.Class, insertText: 'ReplicatedStorage', detail: 'ReplicatedStorage Service', range: range },
+                            { label: 'TweenService', kind: monaco.languages.CompletionItemKind.Class, insertText: 'TweenService', range: range },
+                            { label: 'UserInputService', kind: monaco.languages.CompletionItemKind.Class, insertText: 'UserInputService', range: range },
+                            { label: 'FindFirstChild', kind: monaco.languages.CompletionItemKind.Method, insertText: 'FindFirstChild("${1:Name}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
+                            { label: 'WaitForChild', kind: monaco.languages.CompletionItemKind.Method, insertText: 'WaitForChild("${1:Name}")', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range },
+                            { label: 'Destroy', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Destroy()', range: range },
+                            { label: 'Clone', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Clone()', range: range },
+                            { label: 'Connect', kind: monaco.languages.CompletionItemKind.Method, insertText: 'Connect(function(${1:args})\n\t$0\nend)', insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range: range }
+                        ];
 
-                    return { suggestions: autocompleteItems };
-                }
+                        return { suggestions: autocompleteItems };
+                    }
+                });
+
+                document.getElementById('editor-view').innerHTML = ''; // ล้างข้อความโหลด
+
+                editorInstance = monaco.editor.create(document.getElementById('editor-view'), {
+                    value: 'print("Hello Roblox")',
+                    language: 'lua',
+                    theme: 'vs',
+                    automaticLayout: true,
+                    fontSize: 14,
+                    lineHeight: 19,
+                    minimap: { enabled: false },
+                    autoClosingBrackets: 'always',
+                    autoClosingQuotes: 'always',
+                    wordWrap: "on",
+                    scrollbar: {
+                        verticalScrollbarSize: 8,
+                        horizontalScrollbarSize: 8
+                    },
+                    lineNumbersMinChars: 3,
+                    glyphMargin: false,
+                    folding: false,
+                    lineDecorationsWidth: 6
+                });
+
+                editorInstance.onDidChangeCursorPosition(function (e) {
+                    document.getElementById('position-text').innerText = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
+                });
+
+                setTimeout(() => {
+                    editorInstance.layout();
+                }, 80);
             });
-
-            editorInstance = monaco.editor.create(document.getElementById('editor-view'), {
-                value: 'print("Hello Roblox")',
-                language: 'lua',
-                theme: 'vs',
-                automaticLayout: true,
-                fontSize: 14,
-                lineHeight: 19,
-                minimap: { enabled: false },
-                autoClosingBrackets: 'always',
-                autoClosingQuotes: 'always',
-                wordWrap: "on",
-                scrollbar: {
-                    verticalScrollbarSize: 8,
-                    horizontalScrollbarSize: 8
-                },
-                lineNumbersMinChars: 3,
-                glyphMargin: false,
-                folding: false,
-                lineDecorationsWidth: 6
-            });
-
-            editorInstance.onDidChangeCursorPosition(function (e) {
-                document.getElementById('position-text').innerText = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
-            });
-
-            setTimeout(() => {
-                editorInstance.layout();
-            }, 80);
-        });
+        }
 
         window.addEventListener('resize', () => {
             if (editorInstance) {
@@ -234,20 +233,22 @@
             if (activeTheme === 'light') {
                 activeTheme = 'dark';
                 body.setAttribute('data-theme', 'dark');
-                monaco.editor.setTheme('vs-dark');
+                if (typeof monaco !== 'undefined') monaco.editor.setTheme('vs-dark');
                 themeIcon.setAttribute('data-lucide', 'sun');
                 themeText.innerText = 'Light';
             } else {
                 activeTheme = 'light';
                 body.setAttribute('data-theme', 'light');
-                monaco.editor.setTheme('vs');
+                if (typeof monaco !== 'undefined') monaco.editor.setTheme('vs');
                 themeIcon.setAttribute('data-lucide', 'moon');
                 themeText.innerText = 'Dark';
             }
-            lucide.createIcons();
+            // ✅ ป้องกันพังตอนสลับธีม
+            if (typeof lucide !== 'undefined') lucide.createIcons();
         }
 
         function saveFile() {
+            if (!editorInstance) return;
             const code = editorInstance.getValue();
             const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
             const url = URL.createObjectURL(blob);
@@ -260,21 +261,31 @@
         }
 
         function copyCode() {
+            if (!editorInstance) return;
             const code = editorInstance.getValue();
-            navigator.clipboard.writeText(code).then(() => {
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(code).then(() => updateStatus('Copied to clipboard'));
+            } else {
+                const textArea = document.createElement("textarea");
+                textArea.value = code;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textArea);
                 updateStatus('Copied to clipboard');
-            });
+            }
         }
 
         function clearCode() {
+            if (!editorInstance) return;
             if (confirm('ลบโค้ดสคริปต์ทั้งหมดในหน้าต่าง?')) {
                 editorInstance.setValue('');
                 updateStatus('Editor cleared');
             }
         }
 
-        // นำโค้ดดั้งเดิมที่ทำงานได้เสถียรที่สุดมาใช้งานเพื่อสร้าง Link
         async function createPastefyLink() {
+            if (!editorInstance) return;
             const code = editorInstance.getValue();
             if (!code.trim()) return;
 
@@ -282,7 +293,6 @@
             btnLink.disabled = true;
             btnLink.innerHTML = `<span class="animate-spin inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full"></span>`;
 
-            // ใช้ระบบ Fetch ตัวเดิมของคุณตามที่คุณส่งมาเป๊ะ ๆ โดยไม่มีการปรับเปลี่ยน
             try {
                 const req = await fetch("https://pastefy.app/api/v2/paste", {
                     method: "POST", 
@@ -293,7 +303,6 @@
                 if(!req.ok) throw new Error();
                 const res = await req.json();
                 
-                // ถอดสิทธิ์เพื่อแสดงผลลิงก์ดิบตามโครงสร้างที่คุณใช้ได้จริง
                 const rawUrl = `https://pastefy.app/${res.paste.id}/raw`;
                 displayRawModal(rawUrl, "Pastefy");
             } catch (error) {
@@ -302,7 +311,8 @@
             } finally {
                 btnLink.disabled = false;
                 btnLink.innerHTML = `<i data-lucide="link" class="w-4 h-4"></i><span class="hidden sm:inline text-xs font-medium ml-1.5">Link</span>`;
-                lucide.createIcons();
+                // ✅ ป้องกันพังหลังจากโหลดปุ่มเสร็จ
+                if (typeof lucide !== 'undefined') lucide.createIcons();
             }
         }
 
@@ -326,6 +336,7 @@
         }
 
         function obfuscateCode() {
+            if (!editorInstance) return;
             const code = editorInstance.getValue();
             if (!code.trim()) return;
 
@@ -334,7 +345,6 @@
                 for (let i = 0; i < code.length; i++) {
                     bytes.push(code.charCodeAt(i));
                 }
-                const byteString = bytes.join(',');
                 const result = `-- Encrypted\nlocal _ = {${bytes.join(',')}}; local __ = ""; for i, v in ipairs(_) do __ = __ .. string.char(v) end; loadstring(__)()`;
                 editorInstance.setValue(result);
                 updateStatus('Obfuscated');
